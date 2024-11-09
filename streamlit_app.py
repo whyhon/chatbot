@@ -1,56 +1,93 @@
 import streamlit as st
-from openai import OpenAI
+import openai
+from datetime import datetime
 
-# Show title and description.
-st.title("💬 Chatbot")
+# Set your OpenAI API key
+# st.secrets["OPENAI_API_KEY"] should be set in Streamlit's secrets management
+client = openai.OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+
+
+def get_personality_prediction(birthdate):
+    """Get personality prediction from OpenAI based on birthdate"""
+
+    # Calculate age and zodiac sign (optional additional context)
+    today = datetime.now()
+    age = (
+        today.year
+        - birthdate.year
+        - ((today.month, today.day) < (birthdate.month, birthdate.day))
+    )
+
+    # Construct the prompt for OpenAI
+    prompt = f"""Based on the birthdate {birthdate.strftime('%B %d, %Y')}, provide a brief personality analysis.
+    Consider factors like:
+    - General personality traits
+    - Potential strengths and challenges
+    - Career inclinations
+    - Relationship tendencies
+    Please keep the response concise and positive.
+    """
+
+    # Make API call to OpenAI
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You are an insightful personality analyst.",
+                },
+                {"role": "user", "content": prompt},
+            ],
+        )
+        return response.choices[0].message.content
+    except Exception as e:
+        return f"Error generating prediction: {str(e)}"
+
+
+# Streamlit UI
+st.title("🔮 Birthday Personality Analyzer")
+
 st.write(
-    "This is a simple chatbot that uses OpenAI's GPT-3.5 model to generate responses. "
-    "To use this app, you need to provide an OpenAI API key, which you can get [here](https://platform.openai.com/account/api-keys). "
-    "You can also learn how to build this app step by step by [following our tutorial](https://docs.streamlit.io/develop/tutorials/llms/build-conversational-apps)."
+    """
+Enter your birthdate below to receive a personalized personality analysis!
+"""
 )
 
-# Ask user for their OpenAI API key via `st.text_input`.
-# Alternatively, you can store the API key in `./.streamlit/secrets.toml` and access it
-# via `st.secrets`, see https://docs.streamlit.io/develop/concepts/connections/secrets-management
-openai_api_key = st.text_input("OpenAI API Key", type="password")
-if not openai_api_key:
-    st.info("Please add your OpenAI API key to continue.", icon="🗝️")
-else:
+# Date input
+birthdate = st.date_input(
+    "Select your birthdate",
+    min_value=datetime(1900, 1, 1),
+    max_value=datetime.now(),
+    help="Choose your birthdate from the calendar",
+)
 
-    # Create an OpenAI client.
-    client = OpenAI(api_key=openai_api_key)
+# Generate button
+if st.button("Analyze Personality"):
+    with st.spinner("Generating your personality analysis..."):
+        prediction = get_personality_prediction(birthdate)
 
-    # Create a session state variable to store the chat messages. This ensures that the
-    # messages persist across reruns.
-    if "messages" not in st.session_state:
-        st.session_state.messages = []
+        # Display results in an expander
+        with st.expander("Your Personality Analysis", expanded=True):
+            st.write(prediction)
 
-    # Display the existing chat messages via `st.chat_message`.
-    for message in st.session_state.messages:
-        with st.chat_message(message["role"]):
-            st.markdown(message["content"])
-
-    # Create a chat input field to allow the user to enter a message. This will display
-    # automatically at the bottom of the page.
-    if prompt := st.chat_input("What is up?"):
-
-        # Store and display the current prompt.
-        st.session_state.messages.append({"role": "user", "content": prompt})
-        with st.chat_message("user"):
-            st.markdown(prompt)
-
-        # Generate a response using the OpenAI API.
-        stream = client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=[
-                {"role": m["role"], "content": m["content"]}
-                for m in st.session_state.messages
-            ],
-            stream=True,
+        # Add a disclaimer
+        st.caption(
+            """
+        Note: This analysis is for entertainment purposes only and is generated using AI.
+        Each person is unique and not defined by their birthdate alone.
+        """
         )
 
-        # Stream the response to the chat using `st.write_stream`, then store it in 
-        # session state.
-        with st.chat_message("assistant"):
-            response = st.write_stream(stream)
-        st.session_state.messages.append({"role": "assistant", "content": response})
+# Sidebar with additional information
+with st.sidebar:
+    st.header("About")
+    st.write(
+        """
+    This app uses artificial intelligence to generate personality insights based on your birthdate.
+    The analysis is created using OpenAI's language model.
+    """
+    )
+
+    st.markdown("---")
+    st.caption("Created with Streamlit and OpenAI")
